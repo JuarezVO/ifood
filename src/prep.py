@@ -21,10 +21,6 @@ def _prep_transactions(transactions: pd.DataFrame) -> tuple[pd.DataFrame, pd.Dat
     recebido_visto_completado = recebido_visto.merge(completado,on=['account_id', 'offer id'], suffixes=('_view', '_comp'), how='left')
     trans_com_oferta = trans.merge(recebido_visto_completado,on=['account_id'], suffixes=('', '_jornada'), how='left')
 
-    # trans_com_oferta['view_offer'] = [0 if pd.isna(i) else 1 for i in trans_com_oferta['time_since_test_start_view']]
-    # trans_com_oferta['completed_offer'] = [0 if pd.isna(i) else 1 for i in trans_com_oferta['time_since_test_start_jornada']]
-    # trans_com_oferta['recv_offer'] = [0 if pd.isna(i) else 1 for i in trans_com_oferta['time_since_test_start_recv']]
-
     return trans_com_oferta
 
 

@@ -42,7 +42,7 @@ def plot_clusters(data: pd.DataFrame, clusters: np.ndarray) -> None:
             axes[row, col_idx].set_ylim(0, y_max)
 
     plt.tight_layout()
-    plt.show()
+    plt.savefig('data/images/clusters.png', dpi=300, bbox_inches='tight')
 
 def elbow(data: pd.DataFrame) -> None:
     inertias = []
@@ -57,7 +57,7 @@ def elbow(data: pd.DataFrame) -> None:
     plt.xlabel('k')
     plt.ylabel('Inertia')
     plt.title('Elbow Method')
-    plt.show()
+    plt.savefig('data/images/elbow.png', dpi=300, bbox_inches='tight')
 
 
 def clustering(df: pd.DataFrame) -> pd.DataFrame:
