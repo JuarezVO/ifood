@@ -1,58 +1,116 @@
-import pandas as pd
-from src.config import PREP_AGE_MAX, PREP_COLS_TO_DROP, PREP_COLS_TO_RENAME, PREP_DROP_NA_SUBSETS, PREP_OFFER_CODE
+from pyspark.sql import DataFrame, SparkSession
+from pyspark.sql.functions import (
+    avg,
+    col,
+    concat_ws,
+    substring,
+    to_date,
+    transform,
+    when,
+)
+from pyspark.sql.window import Window
 
-def _prep_transactions(transactions: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """
-    Expande o campo 'value' para uma estrutura de colunas
-    Args:
-        transactions: DataFrame com as transações
-    Returns:
-        Tuple com os DataFrames de sucesso e falha
-    """
-    value_expanded = pd.json_normalize(transactions['value'])
-    transactions = pd.concat([transactions.drop(columns='value'), value_expanded], axis=1)
-
-    recebido = transactions.loc[transactions['event'] == 'offer received'].drop(['offer_id'],axis=1)
-    visto = transactions.loc[transactions['event'] == 'offer viewed'].drop(['offer_id'],axis=1)
-    completado = transactions.loc[transactions['event'] == 'offer completed'].drop(['offer id'],axis=1).rename(columns={'offer_id': 'offer id'})
-    trans = transactions.loc[transactions['event'] == 'transaction'].drop(['offer_id','offer id'],axis=1)
-
-    recebido_visto = recebido.merge(visto,on=['account_id', 'offer id'], suffixes=('_recv', '_view'), how='left')
-    recebido_visto_completado = recebido_visto.merge(completado,on=['account_id', 'offer id'], suffixes=('_view', '_comp'), how='left')
-    trans_com_oferta = trans.merge(recebido_visto_completado,on=['account_id'], suffixes=('', '_jornada'), how='left')
-
-    return trans_com_oferta
+from src.config import (
+    PREP_AGE_MAX,
+    PREP_COLS_TO_DROP,
+    PREP_COLS_TO_RENAME,
+    PREP_DROP_NA_SUBSETS,
+    PREP_OFFER_CODE,
+)
 
 
-def prep_datasets(offers_path: str, profiles_path: str, transactions_path: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """
-    Prepara os datasets de offers, profiles e transactions
-    Args:
-        offers: DataFrame com as offers
-        profiles: DataFrame com os profiles
-        transactions: DataFrame com as transações
-    Returns:
-        Tuple com os DataFrames de offers, profiles e transactions
-    """
-    print('Preparando datasets\n')
-    offers = pd.read_json(offers_path)
+def _suffix_columns(df: DataFrame, suffix: str, exclude: set[str]) -> DataFrame:
+    return df.select([
+        col(column).alias(f"{column}{suffix}") if column not in exclude else col(column)
+        for column in df.columns
+    ])
 
-    profiles = pd.read_json(profiles_path)
 
-    transactions = pd.read_json(transactions_path)
-    transactions = _prep_transactions(transactions)
+def _offer_code_column():
+    expr = None
+    for offer_id, label in PREP_OFFER_CODE.items():
+        condition = when(col("`offer id`") == offer_id, label)
+        expr = condition if expr is None else expr.when(col("`offer id`") == offer_id, label)
+    return expr.otherwise(None)
 
-    df = transactions.merge(offers,left_on='offer id',right_on='id',how='left',suffixes=('_oferta', ''))
-    df = df.merge(profiles,left_on='account_id',right_on='id',how='left',suffixes=('_perfil', ''))
 
-    df['registered_on'] = pd.to_datetime(df['registered_on'],format='%Y%m%d')
-    df['offer_success'] = [0 if pd.isna(i) else 1 for i in df['reward_jornada']]
-    df['discount_per_minvalue'] = df['discount_value'] / df['min_value']
-    df['channels'] = df['channels'].apply(lambda x: ''.join([c[0] for c in x]) if isinstance(x, list) else None)
-    df['mean_amount_per_account'] = df.groupby('account_id')['amount'].transform('mean')
-    df = df[df['age'] <= PREP_AGE_MAX]
-    df['offer_code'] = df['offer id'].map(PREP_OFFER_CODE) # adicionar o tipo de oferta
+def _prep_transactions(transactions: DataFrame) -> DataFrame:
+    transactions = transactions.select(
+        "account_id",
+        "event",
+        "time_since_test_start",
+        col("value.amount").alias("amount"),
+        col("value.`offer id`").alias("offer id"),
+        col("value.offer_id").alias("offer_id"),
+        col("value.reward").alias("reward"),
+    )
 
-    df = df.rename(columns=PREP_COLS_TO_RENAME).drop(columns=PREP_COLS_TO_DROP).dropna(subset=PREP_DROP_NA_SUBSETS)
+    recebido = transactions.filter(col("event") == "offer received").drop("offer_id")
+    visto = transactions.filter(col("event") == "offer viewed").drop("offer_id")
+    completado = (
+        transactions.filter(col("event") == "offer completed")
+        .drop("offer id")
+        .withColumnRenamed("offer_id", "offer id")
+    )
+    trans = transactions.filter(col("event") == "transaction").drop("offer_id", "offer id")
+
+    recebido_visto = _suffix_columns(recebido, "_recv", {"account_id", "offer id"}).join(
+        _suffix_columns(visto, "_view", {"account_id", "offer id"}),
+        on=["account_id", "offer id"],
+        how="left",
+    )
+    recebido_visto_completado = recebido_visto.join(
+        _suffix_columns(completado, "_comp", {"account_id", "offer id"}),
+        on=["account_id", "offer id"],
+        how="left",
+    )
+
+    jornada_suffixes = {"account_id", "offer id", "event", "time_since_test_start", "amount", "reward"}
+    jornada = _suffix_columns(recebido_visto_completado, "_jornada", jornada_suffixes)
+    return trans.join(jornada, on="account_id", how="left")
+
+
+def prep_datasets(
+    spark: SparkSession,
+    offers_path: str,
+    profiles_path: str,
+    transactions_path: str,
+) -> DataFrame:
+    print("Preparando datasets\n")
+    offers = spark.read.json(offers_path)
+    profiles = spark.read.json(profiles_path)
+    transactions = _prep_transactions(spark.read.json(transactions_path))
+
+    df = transactions.join(
+        offers,
+        transactions["offer id"] == offers["id"],
+        how="left",
+    ).drop(offers["id"])
+    df = df.join(
+        profiles,
+        df["account_id"] == profiles["id"],
+        how="left",
+    ).drop(profiles["id"])
+
+    df = df.withColumn("registered_on", to_date(col("registered_on"), "yyyyMMdd"))
+    df = df.withColumn(
+        "offer_success",
+        when(col("reward_jornada").isNull(), 0).otherwise(1),
+    )
+    df = df.withColumn("discount_per_minvalue", col("discount_value") / col("min_value"))
+    df = df.withColumn(
+        "channels",
+        concat_ws("", transform(col("channels"), lambda c: substring(c, 1, 1))),
+    )
+
+    window = Window.partitionBy("account_id")
+    df = df.withColumn("mean_amount_per_account", avg("amount").over(window))
+    df = df.filter(col("age") <= PREP_AGE_MAX)
+    df = df.withColumn("offer_code", _offer_code_column())
+
+    for old, new in PREP_COLS_TO_RENAME.items():
+        df = df.withColumnRenamed(old, new)
+    df = df.drop(*[column for column in PREP_COLS_TO_DROP if column in df.columns])
+    df = df.dropna(subset=PREP_DROP_NA_SUBSETS)
 
     return df

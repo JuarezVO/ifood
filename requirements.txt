@@ -1,8 +1,6 @@
 # Versões do ambiente conda `ml` (Python 3.13)
+pyspark==4.1.1
 pandas==2.2.3
 numpy==2.3.2
-scikit-learn==1.7.1
-imbalanced-learn==0.14.1
 matplotlib==3.10.5
-joblib==1.5.2
 pydantic==2.13.0

@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import pandas as pd
+from pyspark.sql import DataFrame
 
 from src.config import (
     DESCRIBE_OFFER_COLS,
@@ -78,6 +79,7 @@ def describe_profile(df: pd.DataFrame) -> None:
     plt.savefig(IMAGE_DESCRIBE_PROFILE_PATH, dpi=PLOT_DPI, bbox_inches='tight')
 
 
-def describe_ds(df: pd.DataFrame) -> None:
-    describe_offer(df)
-    describe_profile(df)
+def describe_ds(df: DataFrame) -> None:
+    pdf = df.toPandas()
+    describe_offer(pdf)
+    describe_profile(pdf)

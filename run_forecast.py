@@ -1,16 +1,15 @@
-import joblib
-import pandas as pd
-from pydantic import BaseModel
 import numpy as np
+from pydantic import BaseModel
+from pyspark.ml import PipelineModel
+from pyspark.sql import SparkSession
 
 from src.config import (
-    CLUSTERING_COLS_PROFILE,
     DECISION_TREE_TARGET_CLUSTER,
-    MODEL_DECISION_TREE_PATH,
-    MODEL_KMEANS_ENCODERS_PATH,
-    MODEL_KMEANS_PATH,
-    MODEL_KMEANS_SCALER_PATH,
+    MODEL_DECISION_TREE_PIPELINE_PATH,
+    MODEL_KMEANS_PIPELINE_PATH,
 )
+from src.spark_session import get_spark
+
 
 class UserProfile(BaseModel):
     age: int
@@ -19,85 +18,76 @@ class UserProfile(BaseModel):
     amount_medio: float
     success_rate: float
 
+
 class UserOffer(BaseModel):
     min_value: float
     discount_value: float
     discount_per_minvalue: float
     duration: int
-    channels: str  # ex.: 'ems', 'we', 'wem', 'wems' (mesmo formato do prep)
-    offer_type_bogo: int
-    offer_type_discount: int
+    channels: str
+    offer_type: str
 
 
-def inference_kmeans(user_profile: UserProfile) -> int:
-    kmeans = joblib.load(MODEL_KMEANS_PATH)
-    scaler = joblib.load(MODEL_KMEANS_SCALER_PATH)
-    encoders = joblib.load(MODEL_KMEANS_ENCODERS_PATH)
-    row = pd.DataFrame([{
-        'age': user_profile.age,
-        'gender': user_profile.gender,
-        'credit_card_limit': user_profile.credit_card_limit,
-        'amount_medio': user_profile.amount_medio,
-    }], columns=CLUSTERING_COLS_PROFILE)
-    for col, encoder in encoders.items():
-        row[col] = encoder.transform(row[col])
-    return int(kmeans.predict(scaler.transform(row))[0])
-
-def inference_dt(user_profile: UserProfile, user_offer: UserOffer) -> np.ndarray:
-    """
-    Infere sucesso da oferta (0/1) para usuários do cluster 1.
-    O modelo foi treinado apenas nesse cluster (ver decision_tree.py).
-    """
-    model = joblib.load(MODEL_DECISION_TREE_PATH)
-    row = pd.DataFrame([{
-        'min_value': user_offer.min_value,
-        'discount_value': user_offer.discount_value,
-        'discount_per_minvalue': user_offer.discount_per_minvalue,
-        'duration': user_offer.duration,
-        'age': user_profile.age,
-        'credit_card_limit': user_profile.credit_card_limit,
-        'channels': user_offer.channels,
+def inference_kmeans(spark: SparkSession, user_profile: UserProfile) -> int:
+    model = PipelineModel.load(MODEL_KMEANS_PIPELINE_PATH)
+    row_df = spark.createDataFrame([{
+        "age": user_profile.age,
+        "gender": user_profile.gender,
+        "credit_card_limit": user_profile.credit_card_limit,
+        "amount_medio": user_profile.amount_medio,
     }])
-    row = pd.get_dummies(row, columns=['channels'], dtype=int)
-    row['offer_type_bogo'] = user_offer.offer_type_bogo
-    row['offer_type_discount'] = user_offer.offer_type_discount
-    x = row.reindex(columns=model.feature_names_in_, fill_value=0)
-    proba = model.predict_proba(x)
-    return proba
+    cluster = model.transform(row_df).select("cluster").collect()[0][0]
+    return int(cluster)
+
+
+def inference_dt(
+    spark: SparkSession,
+    user_profile: UserProfile,
+    user_offer: UserOffer,
+) -> np.ndarray:
+    model = PipelineModel.load(MODEL_DECISION_TREE_PIPELINE_PATH)
+    row_df = spark.createDataFrame([{
+        "min_value": user_offer.min_value,
+        "discount_value": user_offer.discount_value,
+        "discount_per_minvalue": user_offer.discount_per_minvalue,
+        "duration": user_offer.duration,
+        "age": user_profile.age,
+        "credit_card_limit": user_profile.credit_card_limit,
+        "channels": user_offer.channels,
+        "offer_type": user_offer.offer_type,
+        "offer_success": 0,
+        "weight": 1.0,
+    }])
+    result = model.transform(row_df).select("probability").collect()[0][0]
+    return np.array([1.0 - result[1], result[1]])
+
 
 if __name__ == "__main__":
-    user_profile_1 = UserProfile(
-        age=20,
-        gender='M',
-        credit_card_limit=100,
-        amount_medio=10,
-        success_rate=0.1
-    )
-
-    user_profile_2 = UserProfile(
-        age=30,
-        gender='M',
-        credit_card_limit=100,
-        amount_medio=10,
-        success_rate=0.1
-    )
-
-    user_profile = user_profile_2
-
-    user_group = inference_kmeans(user_profile)
-    print(f'cluster: {user_group}')
-
-    if user_group == DECISION_TREE_TARGET_CLUSTER:
-        user_offer = UserOffer(
-            min_value=10.0,
-            discount_value=2.0,
-            discount_per_minvalue=0.2,
-            duration=7,
-            channels='em',
-            offer_type_bogo=0,
-            offer_type_discount=1,
+    spark = get_spark()
+    try:
+        user_profile = UserProfile(
+            age=30,
+            gender="M",
+            credit_card_limit=100,
+            amount_medio=10,
+            success_rate=0.1,
         )
 
-        proba = inference_dt(user_profile, user_offer)[0]
-        print(f'Probabilidade da oferta ser aceita: {proba[1] * 100:.2f}%')
-        print(f'Probabilidade da oferta não ser aceita: {proba[0] * 100:.2f}%')
+        user_group = inference_kmeans(spark, user_profile)
+        print(f"cluster: {user_group}")
+
+        if user_group == DECISION_TREE_TARGET_CLUSTER:
+            user_offer = UserOffer(
+                min_value=10.0,
+                discount_value=2.0,
+                discount_per_minvalue=0.2,
+                duration=7,
+                channels="em",
+                offer_type="discount",
+            )
+
+            proba = inference_dt(spark, user_profile, user_offer)
+            print(f"Probabilidade da oferta ser aceita: {proba[1] * 100:.2f}%")
+            print(f"Probabilidade da oferta não ser aceita: {proba[0] * 100:.2f}%")
+    finally:
+        spark.stop()
