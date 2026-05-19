@@ -8,7 +8,20 @@ from sklearn.preprocessing import LabelEncoder
 
 import joblib
 
-from src.config import CLUSTERING_COLS_PROFILE
+from src.config import (
+    CLUSTERING_COLS_PROFILE,
+    GENDER_LABELS,
+    IMAGE_CLUSTERS_PATH,
+    IMAGE_ELBOW_PATH,
+    KMEANS_ELBOW_K_MAX,
+    KMEANS_ELBOW_K_MIN,
+    KMEANS_N_CLUSTERS,
+    MODEL_KMEANS_ENCODERS_PATH,
+    MODEL_KMEANS_PATH,
+    MODEL_KMEANS_SCALER_PATH,
+    PLOT_DPI,
+    RANDOM_STATE,
+)
 
 def plot_clusters(data: pd.DataFrame, clusters: np.ndarray) -> None:
     df = data.copy()
@@ -32,7 +45,7 @@ def plot_clusters(data: pd.DataFrame, clusters: np.ndarray) -> None:
                 ax.set_ylabel(f'Cluster {cluster}')
             if col == 'gender':
                 ax.set_xticks([0, 1, 2])
-                ax.set_xticklabels(['F', 'M', 'O'])
+                ax.set_xticklabels(GENDER_LABELS)
 
     for col_idx in range(n_cols):
         col = numeric_cols[col_idx]
@@ -44,14 +57,14 @@ def plot_clusters(data: pd.DataFrame, clusters: np.ndarray) -> None:
             axes[row, col_idx].set_ylim(0, y_max)
 
     plt.tight_layout()
-    plt.savefig('data/images/clusters.png', dpi=300, bbox_inches='tight')
+    plt.savefig(IMAGE_CLUSTERS_PATH, dpi=PLOT_DPI, bbox_inches='tight')
 
 def elbow(data: pd.DataFrame) -> None:
     inertias = []
-    k_range = range(2, 11)
+    k_range = range(KMEANS_ELBOW_K_MIN, KMEANS_ELBOW_K_MAX + 1)
 
     for k in k_range:
-        kmeans = KMeans(n_clusters=k, random_state=42)
+        kmeans = KMeans(n_clusters=k, random_state=RANDOM_STATE)
         kmeans.fit(data)
         inertias.append(kmeans.inertia_)
 
@@ -59,7 +72,7 @@ def elbow(data: pd.DataFrame) -> None:
     plt.xlabel('k')
     plt.ylabel('Inertia')
     plt.title('Elbow Method')
-    plt.savefig('data/images/elbow.png', dpi=300, bbox_inches='tight')
+    plt.savefig(IMAGE_ELBOW_PATH, dpi=PLOT_DPI, bbox_inches='tight')
 
 
 def clustering(df: pd.DataFrame) -> pd.DataFrame:
@@ -85,16 +98,16 @@ def clustering(df: pd.DataFrame) -> pd.DataFrame:
     scaler = StandardScaler()
     data_scaled = scaler.fit_transform(df_model[CLUSTERING_COLS_PROFILE])
     # elbow(data_scaled)
-    kmeans = KMeans(n_clusters=3, random_state=42)
+    kmeans = KMeans(n_clusters=KMEANS_N_CLUSTERS, random_state=RANDOM_STATE)
     clusters = kmeans.fit_predict(data_scaled)
 
     data['cluster'] = clusters
     df = df.merge(data[['account_id', 'cluster','taxa_sucesso']], on='account_id', how='left')
 
-    joblib.dump(kmeans, 'model/kmeans.pkl')
-    joblib.dump(scaler, 'model/kmeans_scaler.pkl')
-    joblib.dump(encoders, 'model/kmeans_encoders.pkl')
-    print('KMeans salvo em model/kmeans.pkl\n')
+    joblib.dump(kmeans, MODEL_KMEANS_PATH)
+    joblib.dump(scaler, MODEL_KMEANS_SCALER_PATH)
+    joblib.dump(encoders, MODEL_KMEANS_ENCODERS_PATH)
+    print(f'KMeans salvo em {MODEL_KMEANS_PATH}\n')
 
     plot_clusters(df_plot, clusters)
     return df

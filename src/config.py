@@ -1,8 +1,32 @@
 import datetime as dt
 
-TODAY= dt.datetime.now()
+# --- Datas ---
+TODAY = dt.datetime.now()
 TODAY_STR = TODAY.strftime('%Y-%m-%d')
 
+# --- Caminhos: dados brutos ---
+RAW_OFFERS_PATH = 'data/raw/offers.json'
+RAW_PROFILE_PATH = 'data/raw/profile.json'
+RAW_TRANSACTIONS_PATH = 'data/raw/transactions.json'
+
+# --- Caminhos: dados processados ---
+PROCESSED_FULL_DATASET_PATH = 'data/processed/full_dataset.csv'
+PROCESSED_CLUSTERED_DATASET_PATH = 'data/processed/full_dataset_clustered.csv'
+
+# --- Caminhos: imagens ---
+IMAGE_CLUSTERS_PATH = 'data/images/clusters.png'
+IMAGE_ELBOW_PATH = 'data/images/elbow.png'
+IMAGE_DESCRIBE_OFFER_PATH = 'data/images/describe_offer.png'
+IMAGE_DESCRIBE_PROFILE_PATH = 'data/images/describe_profile.png'
+PLOT_DPI = 300
+
+# --- Caminhos: modelos ---
+MODEL_KMEANS_PATH = 'model/kmeans.pkl'
+MODEL_KMEANS_SCALER_PATH = 'model/kmeans_scaler.pkl'
+MODEL_KMEANS_ENCODERS_PATH = 'model/kmeans_encoders.pkl'
+MODEL_DECISION_TREE_PATH = 'model/decision_tree.pkl'
+
+# --- Prep ---
 PREP_COLS_TO_DROP = ['event_recv', 'event_view', 'event_jornada','amount_jornada', 'reward_view','amount_view','reward_recv', 'amount_view', 'reward_view', 'reward', 'id_perfil','id', 'amount_recv','event','registered_on','offer id']
 PREP_COLS_TO_RENAME = {'reward_jornada': 'reward','time_since_test_start':'time_since_test_start_transaction'}
 PREP_DROP_NA_SUBSETS = ['offer_code', 'account_id']
@@ -15,6 +39,39 @@ PREP_OFFER_CODE = {'ae264e3637204a6fb9bb56bc8210ddfd': 'Offer 1', '0b1e1539f2cc4
  '9b98b8c7a33c4b65b9aebfe6a799e6d9': 'Offer 9', 'f19421c1d4aa40978ebb69ca19b0e20d': 'Offer 10'}
 
 GENDER_ENCODE = {'F': 0, 'M': 1, 'O': 2}
+GENDER_LABELS = ['F', 'M', 'O']
 
+# --- Clustering ---
 CLUSTERING_COLS = ['amount','channels','offer_type', 'age', 'gender', 'credit_card_limit']
 CLUSTERING_COLS_PROFILE = ['age', 'gender', 'credit_card_limit', 'amount_medio']
+RANDOM_STATE = 42
+KMEANS_N_CLUSTERS = 3
+KMEANS_ELBOW_K_MIN = 2
+KMEANS_ELBOW_K_MAX = 10
+
+# --- Pipeline de treino ---
+OFFER_TYPE_EXCLUDE = 'informational'
+
+# --- Decision tree ---
+DECISION_TREE_TARGET_CLUSTER = 1
+DECISION_TREE_FEATURES = [
+    'channels', 'offer_type', 'min_value', 'discount_value',
+    'discount_per_minvalue', 'offer_success', 'cluster', 'duration',
+    'age', 'credit_card_limit',
+]
+DECISION_TREE_TARGET_COL = 'offer_success'
+DECISION_TREE_TEST_SIZE = 0.2
+DECISION_TREE_GRID_PARAMS = {
+    'max_depth': [7, 9, 12],
+    'min_samples_split': [2, 5, 10],
+    'min_samples_leaf': [100, 150],
+    'max_features': ['sqrt', 'log2', None],
+}
+DECISION_TREE_GRID_CV = 5
+DECISION_TREE_GRID_SCORING = 'accuracy'
+
+# --- Describe datasets ---
+DESCRIBE_OFFER_COLS = ['offer_code', 'min_value', 'offer_type', 'channels']
+DESCRIBE_PROFILE_COLS = ['credit_card_limit', 'age', 'amount']
+PLOT_COLOR_SUCCESS = 'forestgreen'
+PLOT_COLOR_FAIL = 'firebrick'

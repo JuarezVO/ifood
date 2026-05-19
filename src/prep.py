@@ -1,5 +1,5 @@
 import pandas as pd
-from src.config import PREP_AGE_MAX, PREP_COLS_TO_DROP, PREP_COLS_TO_RENAME, PREP_DROP_NA_SUBSETS, PREP_OFFER_CODE, TODAY
+from src.config import PREP_AGE_MAX, PREP_COLS_TO_DROP, PREP_COLS_TO_RENAME, PREP_DROP_NA_SUBSETS, PREP_OFFER_CODE
 
 def _prep_transactions(transactions: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     """

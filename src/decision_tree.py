@@ -10,6 +10,18 @@ import joblib
 
 from time import perf_counter
 
+from src.config import (
+    DECISION_TREE_FEATURES,
+    DECISION_TREE_GRID_CV,
+    DECISION_TREE_GRID_PARAMS,
+    DECISION_TREE_GRID_SCORING,
+    DECISION_TREE_TARGET_CLUSTER,
+    DECISION_TREE_TARGET_COL,
+    DECISION_TREE_TEST_SIZE,
+    MODEL_DECISION_TREE_PATH,
+    RANDOM_STATE,
+)
+
 ts = perf_counter()
 
 # Carrega o dataset e seleciona as features
@@ -23,42 +35,37 @@ def train_decision_tree(df: pd.DataFrame) -> None:
     """
     print('Decision Tree\n')
     print('Tamanho dos clusters: \n', df['cluster'].value_counts(),'\n')
-    features = ['channels', 'offer_type', 'min_value', 'discount_value', 'discount_per_minvalue', 'offer_success','cluster','duration','age','credit_card_limit']
-    df = df[features]
-    c1 = df[df['cluster'] == 1].drop(columns=['cluster'])
+    df = df[DECISION_TREE_FEATURES]
+    c1 = df[df['cluster'] == DECISION_TREE_TARGET_CLUSTER].drop(columns=['cluster'])
 
     # One-hot encoding: cria colunas binárias para cada categoria de cada feature categórica
-    categorical_cols = [col for col in c1.columns if c1[col].dtype == 'object' and col != 'offer_success']
+    categorical_cols = [col for col in c1.columns if c1[col].dtype == 'object' and col != DECISION_TREE_TARGET_COL]
     c1_encoded = pd.get_dummies(c1, columns=categorical_cols, dtype=int)
 
     # Separa as features e alvo
-    x = c1_encoded.drop(columns=['offer_success'])
-    y = c1_encoded['offer_success']
+    x = c1_encoded.drop(columns=[DECISION_TREE_TARGET_COL])
+    y = c1_encoded[DECISION_TREE_TARGET_COL]
 
     # Separa os dados de treino e teste
-    x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=42, stratify=y)
+    x_train, x_test, y_train, y_test = train_test_split(
+        x, y, test_size=DECISION_TREE_TEST_SIZE, random_state=RANDOM_STATE, stratify=y,
+    )
     train_data = pd.concat([x_train, y_train], axis=1)
-    print("Dataset:\n", train_data['offer_success'].value_counts(),'\n')
+    print("Dataset:\n", train_data[DECISION_TREE_TARGET_COL].value_counts(),'\n')
 
     # Ajusta o desbalanceamento das classes
-    smote = SMOTE(random_state=42,)
+    smote = SMOTE(random_state=RANDOM_STATE)
     x_train, y_train = smote.fit_resample(x_train, y_train)
     train_balanced = pd.concat([x_train, y_train], axis=1)
-    print("Dataset balanceado:\n", train_balanced['offer_success'].value_counts(),'\n')
+    print("Dataset balanceado:\n", train_balanced[DECISION_TREE_TARGET_COL].value_counts(),'\n')
 
     # Define os modelos
-    tree = DecisionTreeClassifier(random_state=42)
-
-    # Define os parâmetros para o GridSearchCV
-    params = {
-        'max_depth': [7, 9, 12],
-        'min_samples_split': [2, 5, 10],
-        'min_samples_leaf': [100, 150],
-        'max_features': ['sqrt', 'log2', None]
-    }
+    tree = DecisionTreeClassifier(random_state=RANDOM_STATE)
 
     # Ajusta o modelo
-    grid = GridSearchCV(tree, params, cv=5, scoring='accuracy')
+    grid = GridSearchCV(
+        tree, DECISION_TREE_GRID_PARAMS, cv=DECISION_TREE_GRID_CV, scoring=DECISION_TREE_GRID_SCORING,
+    )
     grid.fit(x_train, y_train)
 
     # Apresenta os resultados
@@ -71,12 +78,12 @@ def train_decision_tree(df: pd.DataFrame) -> None:
     print(pd.DataFrame(report))
 
     # Taxa de conversão atual (sem modelo)
-    baseline = c1['offer_success'].mean()
+    baseline = c1[DECISION_TREE_TARGET_COL].mean()
     modelo = report['1']['precision']
     ganho = (modelo - baseline) / baseline * 100
     print(f'Base: {baseline*100.0:.2f}% | Modelo: {modelo*100.0:.2f}% | Melhoria estimada: {ganho:.2f}%\n')
 
-    joblib.dump(best_tree, 'model/decision_tree.pkl')
-    print('Modelo salvo em models/decision_tree.pkl\n')
+    joblib.dump(best_tree, MODEL_DECISION_TREE_PATH)
+    print(f'Modelo salvo em {MODEL_DECISION_TREE_PATH}\n')
 
     print(f'Time: {round((perf_counter() - ts)/60, 2)}min')

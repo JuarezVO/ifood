@@ -2,7 +2,14 @@ import joblib
 import pandas as pd
 from pydantic import BaseModel
 
-from src.config import CLUSTERING_COLS_PROFILE
+from src.config import (
+    CLUSTERING_COLS_PROFILE,
+    DECISION_TREE_TARGET_CLUSTER,
+    MODEL_DECISION_TREE_PATH,
+    MODEL_KMEANS_ENCODERS_PATH,
+    MODEL_KMEANS_PATH,
+    MODEL_KMEANS_SCALER_PATH,
+)
 
 class UserProfile(BaseModel):
     age: int
@@ -22,9 +29,9 @@ class UserOffer(BaseModel):
 
 
 def inference_kmeans(user_profile: UserProfile) -> int:
-    kmeans = joblib.load('model/kmeans.pkl')
-    scaler = joblib.load('model/kmeans_scaler.pkl')
-    encoders = joblib.load('model/kmeans_encoders.pkl')
+    kmeans = joblib.load(MODEL_KMEANS_PATH)
+    scaler = joblib.load(MODEL_KMEANS_SCALER_PATH)
+    encoders = joblib.load(MODEL_KMEANS_ENCODERS_PATH)
     row = pd.DataFrame([{
         'age': user_profile.age,
         'gender': user_profile.gender,
@@ -40,7 +47,7 @@ def inference_dt(user_profile: UserProfile, user_offer: UserOffer) -> int:
     Infere sucesso da oferta (0/1) para usuários do cluster 1.
     O modelo foi treinado apenas nesse cluster (ver decision_tree.py).
     """
-    model = joblib.load('model/decision_tree.pkl')
+    model = joblib.load(MODEL_DECISION_TREE_PATH)
     row = pd.DataFrame([{
         'min_value': user_offer.min_value,
         'discount_value': user_offer.discount_value,
@@ -78,7 +85,7 @@ if __name__ == "__main__":
     user_group = inference_kmeans(user_profile)
     print(f'cluster: {user_group}')
 
-    if user_group == 1:
+    if user_group == DECISION_TREE_TARGET_CLUSTER:
         user_offer = UserOffer(
             min_value=10.0,
             discount_value=2.0,
