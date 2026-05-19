@@ -34,6 +34,7 @@ def prep_datasets(offers_path: str, profiles_path: str, transactions_path: str) 
     Returns:
         Tuple com os DataFrames de offers, profiles e transactions
     """
+    print('Preparando datasets\n')
     offers = pd.read_json(offers_path)
 
     profiles = pd.read_json(profiles_path)

@@ -2,6 +2,14 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 def describe_offer(df: pd.DataFrame) -> None:
+    """
+    Descreve as ofertas
+    Args:
+        df: DataFrame com os dados
+    Returns:
+        None
+    """
+    print('Descrição das ofertas\n')
     fig, axs = plt.subplots(2, 2, figsize=(10, 5))
     axs = axs.flatten()
 
@@ -24,6 +32,14 @@ def describe_offer(df: pd.DataFrame) -> None:
 
 
 def describe_profile(df: pd.DataFrame) -> None:
+    """
+    Descreve o perfil dos usuários
+    Args:
+        df: DataFrame com os dados
+    Returns:
+        None
+    """
+    print('Descrição do perfil\n')
     sucesso = df[df['offer_success'] == 1]
     falha = df[df['offer_success'] == 0]
 

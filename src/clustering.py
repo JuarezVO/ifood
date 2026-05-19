@@ -61,6 +61,7 @@ def elbow(data: pd.DataFrame) -> None:
 
 
 def clustering(df: pd.DataFrame) -> pd.DataFrame:
+    print('Clustering\n')
     data = df.groupby('account_id').agg(
         age=('age', 'first'),
         gender=('gender', 'first'),
@@ -86,7 +87,6 @@ def clustering(df: pd.DataFrame) -> pd.DataFrame:
     df = df.merge(data[['account_id', 'cluster','taxa_sucesso']], on='account_id', how='left')
 
     taxa_por_cluster = data.groupby('cluster')['taxa_sucesso'].mean().sort_values()
-    print(taxa_por_cluster)
 
     plot_clusters(df_plot, clusters)
     return df

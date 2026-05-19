@@ -14,6 +14,14 @@ ts = perf_counter()
 
 # Carrega o dataset e seleciona as features
 def train_decision_tree(df: pd.DataFrame) -> None:
+    """
+    Treina o modelo de Decision Tree
+    Args:
+        df: DataFrame com os dados
+    Returns:
+        None
+    """
+    print('Decision Tree\n')
     print('Tamanho dos clusters: \n', df['cluster'].value_counts(),'\n')
     features = ['channels', 'offer_type', 'min_value', 'discount_value', 'discount_per_minvalue', 'offer_success','cluster','duration','age','credit_card_limit']
     df = df[features]
@@ -68,6 +76,7 @@ def train_decision_tree(df: pd.DataFrame) -> None:
     ganho = (modelo - baseline) / baseline * 100
     print(f'Base: {baseline*100.0:.2f}% | Modelo: {modelo*100.0:.2f}% | Melhoria estimada: {ganho:.2f}%\n')
 
-    joblib.dump(best_tree, 'data/models/decision_tree.pkl')
-    print('Modelo salvo em data/models/decision_tree.pkl\n')
+    joblib.dump(best_tree, 'model/decision_tree.pkl')
+    print('Modelo salvo em models/decision_tree.pkl\n')
+
     print(f'Time: {round((perf_counter() - ts)/60, 2)}min')
