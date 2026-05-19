@@ -75,12 +75,15 @@ def clustering(df: pd.DataFrame) -> pd.DataFrame:
     df_plot = data[CLUSTERING_COLS_PROFILE + ['taxa_sucesso']].dropna()
     df_model = df_plot[CLUSTERING_COLS_PROFILE].copy()
 
+    encoders = {}
     for col in CLUSTERING_COLS_PROFILE:
         if df_model[col].dtype == 'object':
-            df_model[col] = LabelEncoder().fit_transform(df_model[col])
+            encoders[col] = LabelEncoder().fit(df_model[col])
+            df_model[col] = encoders[col].transform(df_model[col])
             df_plot[col] = df_model[col]
 
-    data_scaled = StandardScaler().fit_transform(df_model[CLUSTERING_COLS_PROFILE])
+    scaler = StandardScaler()
+    data_scaled = scaler.fit_transform(df_model[CLUSTERING_COLS_PROFILE])
     # elbow(data_scaled)
     kmeans = KMeans(n_clusters=3, random_state=42)
     clusters = kmeans.fit_predict(data_scaled)
@@ -89,6 +92,8 @@ def clustering(df: pd.DataFrame) -> pd.DataFrame:
     df = df.merge(data[['account_id', 'cluster','taxa_sucesso']], on='account_id', how='left')
 
     joblib.dump(kmeans, 'model/kmeans.pkl')
+    joblib.dump(scaler, 'model/kmeans_scaler.pkl')
+    joblib.dump(encoders, 'model/kmeans_encoders.pkl')
     print('KMeans salvo em model/kmeans.pkl\n')
 
     plot_clusters(df_plot, clusters)
