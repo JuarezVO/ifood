@@ -1,0 +1,5 @@
+*.pdf
+*.png
+*.gz
+full_dataset*
+__pycache__/
