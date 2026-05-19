@@ -1,3 +1,4 @@
+import os
 from src.config import (
     OFFER_TYPE_EXCLUDE,
     PROCESSED_CLUSTERED_DATASET_PATH,
@@ -10,6 +11,10 @@ from src.prep import prep_datasets
 from src.clustering import clustering
 from src.describe_ds import describe_ds
 from src.decision_tree import train_decision_tree
+
+os.makedirs('model', exist_ok=True)
+os.makedirs('data/processed', exist_ok=True)
+os.makedirs('data/images', exist_ok=True)
 
 df = prep_datasets(RAW_OFFERS_PATH, RAW_PROFILE_PATH, RAW_TRANSACTIONS_PATH)
 df.to_csv(PROCESSED_FULL_DATASET_PATH, index=False)

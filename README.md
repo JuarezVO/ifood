@@ -1,34 +1,96 @@
-# Duvidas
-## Eventos
-1) Por que apenas "transaction" possui valor?
-2) Por que apenas "transaction" não possui "offer_id"?
+# Previsão de aceite de ofertas
 
-Soluçao: pedi ajuda a IA para me explicar o motivo para esses detalhes
+Pipeline de machine learning que agrupa usuários por perfil (K-Means) e prevê se uma oferta será aceita (árvore de decisão)
 
-# Detalhes
-1) Daqueles que não completaram uma transação, apenas 20 não receberam oferta (time_since_test_start_recv = NaN)
+## Como utilizar
 
-2) time_since alguma coisa:
-time_since_test_start_transaction   = 0.0   → transação aconteceu no início do experimento
-time_since_test_start_recv          = 0.0   → oferta foi recebida no início do experimento
-time_since_test_start_view          = 0.0   → oferta foi vista no início do experimento
-time_since_test_start_jornada       = NaN   → oferta NÃO foi completada
+### Pré-requisitos
 
-Quando a jornada é NaN, então a oferta não foi utilizada. Como houve uma transação, ela não foi o suficiente para utilizar a oferta, talvez o valor da transação não tenha sido suficiente.
+- Dados em `data/raw/` (`offers.json`, `profile.json`, `transactions.json`)
 
-3) Datas
-Eu poderia utilizar as datas de registro para calcular a idade do usuário com relação a oferta, por exemplo, mas não sei a data da oferta.
+Ative o ambiente e instale as dependências:
 
-4) Propensão a utilização de oferta
-Pensei que utilizar a porcentagem de sucesso de uma oferta por usuário. Conversando com o "Claúdio", ele apontou que isso poderia trazer vazamento de dados, pois eu já indicaria ao modelo que o usuário tem maior chance de aceitar a oferta.
-Se eu fosse prever o impacto de uma oferta futura, eu poderia utilizar o histórico para estimar esse valor.
+```bash
+pip install -r requirements.txt
+```
 
-5) Idade do usuário na criação da conta
-Idade tem máximo de 118 anos. Ou seja, não é confiável e vai ser filtrada até 80
+### Treinar os modelos
 
-6) Channels
-Se não utilizar a web, o sucesso é menor que o fracasso.
+Na raiz do projeto:
 
-7) Fazer:
-A partir dos clusters, ver qual oferta é melhor para cada grupo
-Ver qual oferta converteu mais (caracteristicas, clustering de novo?)
+```bash
+python run_train.py
+```
+
+O script:
+
+1. Prepara e une os três JSONs
+2. Gera gráficos exploratórios em `data/images/`
+3. Agrupa usuários em clusters e salva os modelos em `model/`
+4. Treina a árvore de decisão para o cluster alvo
+5. Salva datasets processados em `data/processed/`
+
+### Fazer previsões
+
+Depois do treino, use as funções em `run_forecast.py`:
+1. Edite os detalhes do usuário utilizando a classe UserProfile
+2. Edite a oferta com a classe UserOffer
+3. Defina o grupo do usuário através da análise de clusters
+4. Se o grupo for 1, ele estimará o sucesso da oferta para o usuário
+
+```bash
+python run_forecast.py
+```
+
+## Estrutura do projeto
+
+```
+├── data/
+│   ├── raw/              # JSONs de entrada
+│   ├── processed/        # CSVs gerados pelo treino
+│   └── images/           # Gráficos exploratórios e de clusters
+├── model/                # Modelos serializados (.pkl)
+├── src/
+│   ├── config.py         # Caminhos, hiperparâmetros e constantes
+│   ├── prep.py           # Limpeza e junção dos dados
+│   ├── describe_ds.py    # Visualizações exploratórias
+│   ├── clustering.py     # K-Means por perfil de usuário
+│   └── decision_tree.py  # Classificação de aceite da oferta
+├── run_train.py          # Pipeline de treino
+└── run_forecast.py       # Inferência (perfil + oferta)
+```
+
+## Como funciona
+
+### 1. Preparação (`prep.py`)
+
+Os arquivos de ofertas, perfis e transações são unidos em um único dataset. Cada linha representa uma transação ligada à jornada da oferta (recebida, vista, completada). É criada a coluna `offer_success` (1 se a oferta foi utilizada, 0 caso contrário).
+
+### 2. Clustering (`clustering.py`)
+
+Por usuário (`account_id`), calcula-se um perfil agregado (idade, gênero, limite do cartão, valor médio de transação). O K-Means divide os usuários em **3 clusters**. Os artefatos ficam em `model/kmeans*.pkl`.
+
+### 3. Árvore de decisão (`decision_tree.py`)
+
+A árvore é treinada **apenas no cluster 1**, prevendo `offer_success` a partir de características da oferta e do perfil. Classes desbalanceadas são corrigidas com SMOTE; hiperparâmetros são escolhidos via GridSearchCV.
+
+### 4. Inferência (`run_forecast.py`)
+
+1. `inference_kmeans` — atribui o cluster ao perfil informado
+2. `inference_dt` — para usuários do cluster alvo, retorna a probabilidade de 0 ou 1 (oferta não aceita / aceita)
+
+## Configuração
+
+Caminhos de arquivos, número de clusters, features, hiperparâmetros e demais constantes estão centralizados em `src/config.py`.
+
+## Saídas geradas
+
+| Caminho | Descrição |
+|---------|-----------|
+| `data/processed/full_dataset.csv` | Dataset completo após o prep |
+| `data/processed/full_dataset_clustered.csv` | Dataset com coluna `cluster` |
+| `data/images/*.png` | Gráficos exploratórios e de clusters |
+| `model/kmeans.pkl` | Modelo de clustering |
+| `model/kmeans_scaler.pkl` | Normalização usada no K-Means |
+| `model/kmeans_encoders.pkl` | Encoders categóricos |
+| `model/decision_tree.pkl` | Classificador de aceite |

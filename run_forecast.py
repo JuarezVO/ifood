@@ -1,6 +1,7 @@
 import joblib
 import pandas as pd
 from pydantic import BaseModel
+import numpy as np
 
 from src.config import (
     CLUSTERING_COLS_PROFILE,
@@ -42,7 +43,7 @@ def inference_kmeans(user_profile: UserProfile) -> int:
         row[col] = encoder.transform(row[col])
     return int(kmeans.predict(scaler.transform(row))[0])
 
-def inference_dt(user_profile: UserProfile, user_offer: UserOffer) -> int:
+def inference_dt(user_profile: UserProfile, user_offer: UserOffer) -> np.ndarray:
     """
     Infere sucesso da oferta (0/1) para usuários do cluster 1.
     O modelo foi treinado apenas nesse cluster (ver decision_tree.py).
@@ -61,7 +62,8 @@ def inference_dt(user_profile: UserProfile, user_offer: UserOffer) -> int:
     row['offer_type_bogo'] = user_offer.offer_type_bogo
     row['offer_type_discount'] = user_offer.offer_type_discount
     x = row.reindex(columns=model.feature_names_in_, fill_value=0)
-    return int(model.predict(x)[0])
+    proba = model.predict_proba(x)
+    return proba
 
 if __name__ == "__main__":
     user_profile_1 = UserProfile(
@@ -95,4 +97,7 @@ if __name__ == "__main__":
             offer_type_bogo=0,
             offer_type_discount=1,
         )
-        print(f'Oferta poderá ser aceita: {inference_dt(user_profile, user_offer)}')
+
+        proba = inference_dt(user_profile, user_offer)[0]
+        print(f'Probabilidade da oferta ser aceita: {proba[1] * 100:.2f}%')
+        print(f'Probabilidade da oferta não ser aceita: {proba[0] * 100:.2f}%')
