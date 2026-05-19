@@ -14,5 +14,7 @@ PREP_OFFER_CODE = {'ae264e3637204a6fb9bb56bc8210ddfd': 'Offer 1', '0b1e1539f2cc4
  '3f207df678b143eea3cee63160fa8bed': 'Offer 7', 'fafdcd668e3743c1bb461111dcafc2a4': 'Offer 8',
  '9b98b8c7a33c4b65b9aebfe6a799e6d9': 'Offer 9', 'f19421c1d4aa40978ebb69ca19b0e20d': 'Offer 10'}
 
+GENDER_ENCODE = {'F': 0, 'M': 1, 'O': 2}
+
 CLUSTERING_COLS = ['amount','channels','offer_type', 'age', 'gender', 'credit_card_limit']
 CLUSTERING_COLS_PROFILE = ['age', 'gender', 'credit_card_limit', 'amount_medio']

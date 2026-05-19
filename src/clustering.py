@@ -6,6 +6,8 @@ from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import LabelEncoder
 
+import joblib
+
 from src.config import CLUSTERING_COLS_PROFILE
 
 def plot_clusters(data: pd.DataFrame, clusters: np.ndarray) -> None:
@@ -86,7 +88,8 @@ def clustering(df: pd.DataFrame) -> pd.DataFrame:
     data['cluster'] = clusters
     df = df.merge(data[['account_id', 'cluster','taxa_sucesso']], on='account_id', how='left')
 
-    taxa_por_cluster = data.groupby('cluster')['taxa_sucesso'].mean().sort_values()
+    joblib.dump(kmeans, 'model/kmeans.pkl')
+    print('KMeans salvo em model/kmeans.pkl\n')
 
     plot_clusters(df_plot, clusters)
     return df
