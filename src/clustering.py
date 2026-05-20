@@ -89,7 +89,7 @@ def clustering(df: DataFrame) -> tuple[DataFrame, Pipeline, pd.DataFrame]:
     )
 
     model_pdf = (
-        profile_df.select("account_id", *CLUSTERING_COLS_PROFILE)
+        profile_df.select("account_id", *CLUSTERING_COLS_PROFILE, "taxa_sucesso")
         .dropna()
         .toPandas()
     )

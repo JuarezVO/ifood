@@ -1,4 +1,15 @@
 import os
+import warnings
+
+# 1. Silencia o aviso do conflito de OpenMP
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+
+# 2. Define manualmente o número de cores para o Loky (coloque o número de cores da sua CPU, ex: 4, 8, 16, ou apenas ignore)
+os.environ["LOKY_MAX_CPU_COUNT"] = "8"  # Troque pelo número de threads da sua CPU se souber
+
+# 3. Ignora os alertas visuais do Python na tela
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 from src.config import (
     DECISION_TREE_TARGET_CLUSTER,

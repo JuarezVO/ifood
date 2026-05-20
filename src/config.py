@@ -45,7 +45,7 @@ KMEANS_ELBOW_K_MAX = 10
 OFFER_TYPE_EXCLUDE = 'informational'
 
 # --- Decision tree ---
-DECISION_TREE_TARGET_CLUSTER = 1
+DECISION_TREE_TARGET_CLUSTER = 2
 DECISION_TREE_FEATURES = [
     'channels', 'offer_type', 'min_value', 'discount_value',
     'discount_per_minvalue', 'duration', 'age', 'credit_card_limit',
