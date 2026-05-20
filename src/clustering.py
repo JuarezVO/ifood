@@ -79,12 +79,14 @@ def _build_kmeans_pipeline(gender_categories: list[list[str]]) -> Pipeline:
 
 
 def clustering(df: DataFrame) -> tuple[DataFrame, Pipeline, pd.DataFrame]:
-    print("Clustering\n")
+    print("Clustering (Ajuste de Variáveis)\n")
+
+    # PEGA DIRETO O VALOR RE REAL QUE O PREP CALCULOU
     profile_df = df.groupBy("account_id").agg(
         first("age").alias("age"),
         first("gender").alias("gender"),
         first("credit_card_limit").alias("credit_card_limit"),
-        avg("amount").alias("amount_medio"),
+        first("mean_amount_per_account").alias("amount_medio"), # <--- CORREÇÃO AQUI
         avg("offer_success").alias("taxa_sucesso"),
     )
 
