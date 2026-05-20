@@ -6,6 +6,7 @@ from pyspark.sql.functions import (
     substring,
     to_date,
     transform,
+    try_divide,
     when,
 )
 from pyspark.sql.window import Window
@@ -95,9 +96,9 @@ def prep_datasets(
     df = df.withColumn("registered_on", to_date(col("registered_on"), "yyyyMMdd"))
     df = df.withColumn(
         "offer_success",
-        when(col("reward_jornada").isNull(), 0).otherwise(1),
+        when(col("reward_comp_jornada").isNull(), 0).otherwise(1),
     )
-    df = df.withColumn("discount_per_minvalue", col("discount_value") / col("min_value"))
+    df = df.withColumn("discount_per_minvalue", try_divide(col("discount_value"), col("min_value")))
     df = df.withColumn(
         "channels",
         concat_ws("", transform(col("channels"), lambda c: substring(c, 1, 1))),

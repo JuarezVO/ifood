@@ -1,34 +1,56 @@
-# Duvidas
-## Eventos
-1) Por que apenas "transaction" possui valor?
-2) Por que apenas "transaction" não possui "offer_id"?
+# Notas de calibração sklearn ↔ Spark ML
 
-Soluçao: pedi ajuda a IA para me explicar o motivo para esses detalhes
+Ambiente: `conda activate ml` → `python run_train.py`
 
-# Detalhes
-1) Daqueles que não completaram uma transação, apenas 20 não receberam oferta (time_since_test_start_recv = NaN)
+## Prep (confirmado)
 
-2) time_since alguma coisa:
-time_since_test_start_transaction   = 0.0   → transação aconteceu no início do experimento
-time_since_test_start_recv          = 0.0   → oferta foi recebida no início do experimento
-time_since_test_start_view          = 0.0   → oferta foi vista no início do experimento
-time_since_test_start_jornada       = NaN   → oferta NÃO foi completada
+- `offer_success`: `reward_comp_jornada` nulo → 0, senão 1
+- `discount_per_minvalue`: `try_divide(discount_value, min_value)`
 
-Quando a jornada é NaN, então a oferta não foi utilizada. Como houve uma transação, ela não foi o suficiente para utilizar a oferta, talvez o valor da transação não tenha sido suficiente.
+## Clustering (2026-05-20)
 
-3) Datas
-Eu poderia utilizar as datas de registro para calcular a idade do usuário com relação a oferta, por exemplo, mas não sei a data da oferta.
+| Cluster | Usuários (cluster_by_account.csv) |
+|---------|-----------------------------------|
+| 0 | 4635 |
+| 1 | 4622 |
+| 2 | 4219 |
 
-4) Propensão a utilização de oferta
-Pensei que utilizar a porcentagem de sucesso de uma oferta por usuário. Conversando com o "Claúdio", ele apontou que isso poderia trazer vazamento de dados, pois eu já indicaria ao modelo que o usuário tem maior chance de aceitar a oferta.
-Se eu fosse prever o impacto de uma oferta futura, eu poderia utilizar o histórico para estimar esse valor.
+- Gênero: `OrdinalEncoder` com ordem por **frequência** (equivalente ao `StringIndexer` Spark `frequencyDesc`)
+- K-Means: `n_init="auto"`, `random_state=42`, `StandardScaler`
 
-5) Idade do usuário na criação da conta
-Idade tem máximo de 118 anos. Ou seja, não é confiável e vai ser filtrada até 80
+## Árvore — sklearn calibrado (cluster alvo = 1)
 
-6) Channels
-Se não utilizar a web, o sucesso é menor que o fracasso.
+| Métrica | Valor |
+|---------|-------|
+| Linhas no cluster 1 | 227 647 |
+| Treino: sucesso 0 / 1 | 8 866 / 173 251 |
+| Acurácia teste | **0.6844** |
+| Baseline | 95.12% |
+| Modelo (precisão em pred=1) | 98.32% |
+| Melhoria estimada | 3.36% |
 
-7) Fazer:
-A partir dos clusters, ver qual oferta é melhor para cada grupo
-Ver qual oferta converteu mais (caracteristicas, clustering de novo?)
+**Top importâncias:** `credit_card_limit` (0.43), `age` (0.40), `discount_value` (0.08)
+
+### Ajustes vs versão anterior
+
+| Item | Alteração |
+|------|-----------|
+| `DECISION_TREE_TARGET_CLUSTER` | 1 (Spark original) |
+| Split | sem `stratify` (como `randomSplit`) |
+| Pesos | `sample_weight` fórmula Spark (`clf__sample_weight`) |
+| Grid | `min_samples_split` [100, 150] em vez de `min_samples_leaf` |
+| Categóricas | `OneHotEncoder` com categorias por frequência |
+
+### Spark original (preencher se tiver log)
+
+| Métrica | Spark | sklearn |
+|---------|-------|---------|
+| Acurácia teste | _?_| 0.6844 |
+| Tamanho cluster 1 (usuários) | _?_| 4622 |
+| Top-3 features | _?_| credit_card_limit, age, discount_value |
+
+## Limitações
+
+- K-Means sklearn ≠ Spark: clusters não são 1:1 entre implementações
+- `maxBins` Spark não tem equivalente direto no sklearn
+- Réplica exata exigiria pipeline Spark ML salvo para comparação de centróides

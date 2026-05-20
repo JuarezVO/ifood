@@ -4,3 +4,8 @@
 full_dataset*
 *.pkl
 __pycache__/
+scripts/
+model/
+tools
+data/processed/
+NOTAS.md

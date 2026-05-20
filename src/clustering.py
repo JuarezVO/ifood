@@ -1,24 +1,33 @@
 import matplotlib.pyplot as plt
 import pandas as pd
-
-from pyspark.ml import Pipeline
-from pyspark.ml.clustering import KMeans
-from pyspark.ml.feature import StandardScaler, StringIndexer, VectorAssembler
 from pyspark.sql import DataFrame
 from pyspark.sql.functions import avg, col, first
+from sklearn.cluster import KMeans
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OrdinalEncoder, StandardScaler
 
 from src.config import (
     CLUSTERING_COLS_PROFILE,
-    GENDER_LABELS,
+    CLUSTER_BY_ACCOUNT_PATH,
     IMAGE_CLUSTERS_PATH,
     KMEANS_N_CLUSTERS,
-    MODEL_KMEANS_PIPELINE_PATH,
     PLOT_DPI,
     RANDOM_STATE,
 )
 
 
-def plot_clusters(data: pd.DataFrame, clusters: pd.Series) -> None:
+def _gender_categories_by_frequency(pdf: pd.DataFrame) -> list[list[str]]:
+    ordered = (
+        pdf["gender"]
+        .value_counts()
+        .sort_values(ascending=False)
+        .index.tolist()
+    )
+    return [ordered]
+
+
+def plot_clusters(data: pd.DataFrame, clusters: pd.Series, gender_labels: list[str]) -> None:
     df = data.copy()
     df["cluster"] = clusters
 
@@ -39,8 +48,8 @@ def plot_clusters(data: pd.DataFrame, clusters: pd.Series) -> None:
             if col_idx == 0:
                 ax.set_ylabel(f"Cluster {cluster}")
             if column == "gender":
-                ax.set_xticks([0, 1, 2])
-                ax.set_xticklabels(GENDER_LABELS)
+                ax.set_xticks(range(len(gender_labels)))
+                ax.set_xticklabels(gender_labels)
 
     for col_idx in range(n_cols):
         column = numeric_cols[col_idx]
@@ -56,7 +65,20 @@ def plot_clusters(data: pd.DataFrame, clusters: pd.Series) -> None:
     plt.close()
 
 
-def clustering(df: DataFrame) -> DataFrame:
+def _build_kmeans_pipeline(gender_categories: list[list[str]]) -> Pipeline:
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ("gender", OrdinalEncoder(categories=gender_categories), ["gender"]),
+            ("numeric", StandardScaler(), ["age", "credit_card_limit", "amount_medio"]),
+        ],
+    )
+    return Pipeline([
+        ("prep", preprocessor),
+        ("kmeans", KMeans(n_clusters=KMEANS_N_CLUSTERS, random_state=RANDOM_STATE, n_init="auto")),
+    ])
+
+
+def clustering(df: DataFrame) -> tuple[DataFrame, Pipeline, pd.DataFrame]:
     print("Clustering\n")
     profile_df = df.groupBy("account_id").agg(
         first("age").alias("age"),
@@ -66,35 +88,28 @@ def clustering(df: DataFrame) -> DataFrame:
         avg("offer_success").alias("taxa_sucesso"),
     )
 
-    model_df = profile_df.select("account_id", *CLUSTERING_COLS_PROFILE).dropna()
+    model_pdf = (
+        profile_df.select("account_id", *CLUSTERING_COLS_PROFILE)
+        .dropna()
+        .toPandas()
+    )
 
-    indexer = StringIndexer(
-        inputCol="gender",
-        outputCol="gender_idx",
-        handleInvalid="keep",
+    gender_categories = _gender_categories_by_frequency(model_pdf)
+    gender_labels = gender_categories[0]
+    pipeline = _build_kmeans_pipeline(gender_categories)
+    pipeline.fit(model_pdf[CLUSTERING_COLS_PROFILE])
+    model_pdf["cluster"] = pipeline.predict(model_pdf[CLUSTERING_COLS_PROFILE])
+
+    cluster_by_account = model_pdf[["account_id", "cluster"]].copy()
+    cluster_by_account.to_csv(CLUSTER_BY_ACCOUNT_PATH, index=False)
+
+    spark = df.sparkSession
+    clustered_profiles = spark.createDataFrame(
+        cluster_by_account.astype({"cluster": "int"}),
     )
-    assembler = VectorAssembler(
-        inputCols=["age", "gender_idx", "credit_card_limit", "amount_medio"],
-        outputCol="features_raw",
-    )
-    scaler = StandardScaler(
-        inputCol="features_raw",
-        outputCol="features",
-        withStd=True,
-        withMean=True,
-    )
-    kmeans = KMeans(
-        k=KMEANS_N_CLUSTERS,
-        seed=RANDOM_STATE,
-        featuresCol="features",
-        predictionCol="cluster",
-    )
-    pipeline = Pipeline(stages=[indexer, assembler, scaler, kmeans])
-    model = pipeline.fit(model_df)
-    clustered_profiles = model.transform(model_df)
 
     profiles_with_cluster = profile_df.join(
-        clustered_profiles.select("account_id", "cluster"),
+        clustered_profiles,
         on="account_id",
         how="left",
     )
@@ -104,16 +119,13 @@ def clustering(df: DataFrame) -> DataFrame:
         how="left",
     )
 
-    model.write().overwrite().save(MODEL_KMEANS_PIPELINE_PATH)
-    print(f"KMeans pipeline salvo em {MODEL_KMEANS_PIPELINE_PATH}\n")
+    plot_df = model_pdf.copy()
+    gender_encoder = pipeline.named_steps["prep"].named_transformers_["gender"]
+    plot_df["gender"] = gender_encoder.transform(plot_df[["gender"]]).ravel()
+    plot_clusters(
+        plot_df.drop(columns=["cluster", "account_id"]),
+        plot_df["cluster"],
+        gender_labels,
+    )
 
-    plot_df = clustered_profiles.select(
-        "age",
-        col("gender_idx").alias("gender"),
-        "credit_card_limit",
-        "amount_medio",
-        "cluster",
-    ).toPandas()
-    plot_clusters(plot_df.drop(columns=["cluster"]), plot_df["cluster"])
-
-    return df
+    return df, pipeline, cluster_by_account
