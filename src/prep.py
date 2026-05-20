@@ -37,37 +37,32 @@ def _offer_code_column():
 
 
 def _prep_transactions(transactions: DataFrame) -> DataFrame:
-    # Seleciona e normaliza as colunas do JSON
+    # 1. EXPANSÃO DO JSON (Igual ao pd.json_normalize)
+    # Como o JSON tem 'offer id' e 'offer_id', unificamos logo aqui para evitar perdas
     transactions = transactions.select(
         "account_id",
         "event",
         "time_since_test_start",
         col("value.amount").alias("amount"),
-        col("value.`offer id`").alias("offer id"),
-        col("value.offer_id").alias("offer_id"),
+        when(col("value.`offer id`").isNotNull(), col("value.`offer id`"))
+        .otherwise(col("value.offer_id")).alias("offer id"),
         col("value.reward").alias("reward"),
     )
 
-    # Separa os eventos
-    recebido = transactions.filter(col("event") == "offer received").drop("offer_id")
-    visto = transactions.filter(col("event") == "offer viewed").drop("offer_id")
-    completado = (
-        transactions.filter(col("event") == "offer completed")
-        .drop("offer id")
-        .withColumnRenamed("offer_id", "offer id")
-    )
-    trans = transactions.filter(col("event") == "transaction").drop("offer_id", "offer id")
+    # 2. SEPARAÇÃO DOS EVENTOS (Igual ao .loc do Pandas)
+    recebido = transactions.filter(col("event") == "offer received")
+    visto = transactions.filter(col("event") == "offer viewed")
+    completado = transactions.filter(col("event") == "offer completed")
+    trans = transactions.filter(col("event") == "transaction")
 
-    # --- CRITICAL FIX FOR SPARK JOIN DUPLICATION ---
-    # Janela para garantir que se houver ofertas repetidas para o mesmo ID,
-    # o Spark ordene por tempo e não faça produto cartesiano desordenado.
-    window_dedup = Window.partitionBy("account_id", "offer id").orderBy("time_since_test_start")
+    # 3. CONTROLO DE SEQUÊNCIA TEMPORAL (Evita a explosão de linhas por produto cartesiano)
+    # O Pandas junta pela ordem que os eventos aparecem. Criamos um indexador temporal por cliente/oferta
+    window_seq = Window.partitionBy("account_id", "offer id").orderBy("time_since_test_start")
+    recebido = recebido.withColumn("seq", row_number().over(window_seq))
+    visto = visto.withColumn("seq", row_number().over(window_seq))
+    completado = completado.withColumn("seq", row_number().over(window_seq))
 
-    recebido = recebido.withColumn("seq", row_number().over(window_dedup))
-    visto = visto.withColumn("seq", row_number().over(window_dedup))
-    completado = completado.withColumn("seq", row_number().over(window_dedup))
-
-    # Realiza os joins incluindo a sequência temporal ("seq") para espelhar o Pandas
+    # 4. RECONSTRUÇÃO DA JORNADA VIA LEFT JOINS MANTENDO O INDEXADOR 'seq'
     recebido_visto = _suffix_columns(recebido, "_recv", {"account_id", "offer id", "seq"}).join(
         _suffix_columns(visto, "_view", {"account_id", "offer id", "seq"}),
         on=["account_id", "offer id", "seq"],
@@ -78,10 +73,15 @@ def _prep_transactions(transactions: DataFrame) -> DataFrame:
         _suffix_columns(completado, "_comp", {"account_id", "offer id", "seq"}),
         on=["account_id", "offer id", "seq"],
         how="left",
-    ).drop("seq") # Remove a coluna de controle após os joins
+    ).drop("seq") # Remove o indexador temporário após consolidar a jornada
 
-    jornada_suffixes = {"account_id", "offer id", "event", "time_since_test_start", "amount", "reward"}
-    jornada = _suffix_columns(recebido_visto_completado, "_jornada", jornada_suffixes)
+    # 5. O SEGREDO DO SUCESSO: O join final liga as transações à jornada APENAS por account_id
+    # Para espelhar o Pandas, as colunas da jornada ganham o sufixo '_jornada'
+    jornada_exclude = {"account_id"}
+    jornada = _suffix_columns(recebido_visto_completado, "_jornada", jornada_exclude)
+
+    # Mudamos o nome de 'offer id' dentro da jornada para 'offer id_jornada' para não colidir com o 'offer id' da transação
+    jornada = jornada.withColumnRenamed("offer id", "offer id_jornada")
 
     return trans.join(jornada, on="account_id", how="left")
 
@@ -92,17 +92,17 @@ def prep_datasets(
     profiles_path: str,
     transactions_path: str,
 ) -> DataFrame:
-    print("Preparando datasets (Versão Corrigida)\n")
+    print("Preparando datasets em ambiente Spark (Traduzido do Pandas)\n")
 
-    # Leitura dos dados originais
+    # Leitura dos dados brutos
     offers = spark.read.json(offers_path)
     profiles = spark.read.json(profiles_path)
     transactions = _prep_transactions(spark.read.json(transactions_path))
 
-    # Joins com tabelas de apoio
+    # Joins com as tabelas de apoio baseadas na estrutura correta da jornada
     df = transactions.join(
         offers,
-        transactions["offer id"] == offers["id"],
+        transactions["offer id_jornada"] == offers["id"],
         how="left",
     ).drop(offers["id"])
 
@@ -112,8 +112,10 @@ def prep_datasets(
         how="left",
     ).drop(profiles["id"])
 
-# Transformações de colunas e engenharia de features básicas
+    # Engenharia de Features e conversões básicas
     df = df.withColumn("registered_on", to_date(col("registered_on"), "yyyyMMdd"))
+
+    # Correção do mapeamento do sucesso da oferta (olhando para a coluna correta gerada pelo _prep_transactions)
     df = df.withColumn(
         "offer_success",
         when(col("reward_comp_jornada").isNull(), 0).otherwise(1),
@@ -124,19 +126,25 @@ def prep_datasets(
         concat_ws("", transform(col("channels"), lambda c: substring(c, 1, 1))),
     )
 
-    # --- PASSO ADICIONADO AQUI: Criar o offer_code ANTES dos filtros ---
+    # Criamos a coluna 'offer_code' e mapeamos usando a coluna correta vinda da jornada
+    # Como o código original do Pandas usa df['offer id'].map(...), precisamos de garantir que passamos a coluna certa
+    df = df.withColumn("offer id", col("offer id_jornada"))
     df = df.withColumn("offer_code", _offer_code_column())
 
-    # --- ORDEM DOS FILTROS MANTIDA ---
-    # 1. Primeiro limpamos a base deletando idades inválidas e os nulos (Agora o offer_code existe aqui!)
+    # --- CORREÇÃO DA ORDEM MATEMÁTICA ---
+    # 1. Primeiro filtramos a idade para limpar as linhas inválidas
     df = df.filter(col("age") <= PREP_AGE_MAX)
+
+    # 2. Removemos os nulos APENAS das colunas essenciais antes de calcular a média.
+    # Nota: Certifique-off que o seu PREP_DROP_NA_SUBSETS na config não está a tentar apagar nulos de colunas da jornada!
     df = df.dropna(subset=PREP_DROP_NA_SUBSETS)
 
-    # 2. Com a base limpa, calculamos a média por conta (Garante o alinhamento com o Pandas)
+    # 3. Com a base limpa de idades e nulos de registo, calculamos a média por conta.
+    # Isto garante que a média calculada no Spark seja idêntica à do Pandas.
     window_mean = Window.partitionBy("account_id")
     df = df.withColumn("mean_amount_per_account", avg("amount").over(window_mean))
 
-    # Renomeia e dropa as colunas finais de acordo com a configuração
+    # Renomeação e Drop de colunas finais conforme o ficheiro de configuração
     for old, new in PREP_COLS_TO_RENAME.items():
         df = df.withColumnRenamed(old, new)
 
