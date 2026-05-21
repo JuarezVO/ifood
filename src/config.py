@@ -14,12 +14,15 @@ RAW_TRANSACTIONS_PATH = 'data/raw/transactions.json'
 PROCESSED_FULL_DATASET_PATH = 'data/processed/full_dataset.csv'
 PROCESSED_CLUSTERED_DATASET_PATH = 'data/processed/full_dataset_clustered.csv'
 CLUSTER_BY_ACCOUNT_PATH = 'data/processed/cluster_by_account.csv'
+CLASSIFICATION_REPORT_PATH = 'data/processed/classification_report.csv'
+TEST_DATASET_PATH = 'data/processed/test_dataset.csv'
 
 # --- Caminhos: imagens ---
 IMAGE_CLUSTERS_PATH = 'data/images/clusters.png'
 IMAGE_ELBOW_PATH = 'data/images/elbow.png'
 IMAGE_DESCRIBE_OFFER_PATH = 'data/images/describe_offer.png'
 IMAGE_DESCRIBE_PROFILE_PATH = 'data/images/describe_profile.png'
+IMAGE_DESCRIBE_CLASSIFICATION_REPORT_PATH = 'data/images/describe_classification_report.png'
 PLOT_DPI = 300
 
 # --- Prep ---

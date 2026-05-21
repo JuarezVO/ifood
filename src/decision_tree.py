@@ -3,13 +3,14 @@ from time import perf_counter
 import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, classification_report
 from sklearn.model_selection import GridSearchCV, train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.tree import DecisionTreeClassifier
 
 from src.config import (
+    CLASSIFICATION_REPORT_PATH,
     DECISION_TREE_CATEGORICAL_FEATURES,
     DECISION_TREE_FEATURES,
     DECISION_TREE_GRID_CV,
@@ -20,7 +21,9 @@ from src.config import (
     DECISION_TREE_TEST_SIZE,
     PROCESSED_CLUSTERED_DATASET_PATH,
     RANDOM_STATE,
+    TEST_DATASET_PATH,
 )
+from src.describe_ds import describe_classification_report
 
 ts = perf_counter()
 
@@ -115,6 +118,17 @@ def train_decision_tree(
     y_pred = best_model.predict(X_test)
     accuracy = accuracy_score(y_test, y_pred)
     print(f"Acurácia no teste: {accuracy:.4f}")
+
+    report = classification_report(
+        y_test, y_pred, output_dict=True, zero_division=0,
+    )
+    report_df = pd.DataFrame(report)
+    test_data = X_test.copy()
+    test_data[DECISION_TREE_TARGET_COL] = y_test.values
+
+    report_df.to_csv(CLASSIFICATION_REPORT_PATH)
+    test_data.to_csv(TEST_DATASET_PATH, index=False)
+    describe_classification_report(report_df, test_data)
 
     feature_names = _feature_names(best_model)
     importances = best_model.named_steps["clf"].feature_importances_

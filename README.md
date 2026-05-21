@@ -106,5 +106,8 @@ Constantes em `src/config.py`. Para mudar o cluster da árvore, altere `DECISION
 | `data/images/describe_offer.png` | Taxa de sucesso por atributo da oferta |
 | `data/images/describe_profile.png` | Perfil (gênero, limite, idade, valor) |
 | `data/images/clusters.png` | Histogramas por cluster (inclui `taxa_sucesso`) |
+| `data/processed/test_dataset.csv` | Conjunto de teste da árvore (cluster alvo) |
+| `data/processed/classification_report.csv` | Métricas precision/recall/F1 no teste |
+| `data/images/describe_classification_report.png` | Comparativo de ofertas enviadas e taxa de conversão |
 
 Gráficos exploratórios refletem o DataFrame **antes** do filtro de ofertas informacionais; os CSVs de treino são gerados **depois** desse filtro.
