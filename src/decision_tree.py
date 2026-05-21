@@ -75,7 +75,7 @@ def train_decision_tree(df: pd.DataFrame) -> None:
         print(f"{feature}: {importance}")
 
     report = classification_report(y_test, best_tree.predict(x_test), output_dict=True)
-    print(pd.DataFrame(report))
+    print(pd.DataFrame(report),'\n')
 
     # Taxa de conversão atual (sem modelo)
     baseline = c1[DECISION_TREE_TARGET_COL].mean()

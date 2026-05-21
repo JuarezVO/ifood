@@ -4,3 +4,6 @@
 full_dataset*
 *.pkl
 __pycache__/
+*.joblib
+tools/
+data/processed/
