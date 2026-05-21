@@ -5,6 +5,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report
 from sklearn.model_selection import GridSearchCV
 from imblearn.over_sampling import SMOTE
+from src.describe_ds import describe_classification_report
 
 import joblib
 
@@ -53,6 +54,9 @@ def train_decision_tree(df: pd.DataFrame) -> None:
     train_data = pd.concat([x_train, y_train], axis=1)
     print("Dataset:\n", train_data[DECISION_TREE_TARGET_COL].value_counts(),'\n')
 
+    test_data = pd.concat([x_test, y_test], axis=1)
+    test_data.to_csv("data/processed/test_dataset.csv", index=False)
+
     # Ajusta o desbalanceamento das classes
     smote = SMOTE(random_state=RANDOM_STATE)
     x_train, y_train = smote.fit_resample(x_train, y_train)
@@ -75,7 +79,10 @@ def train_decision_tree(df: pd.DataFrame) -> None:
         print(f"{feature}: {importance}")
 
     report = classification_report(y_test, best_tree.predict(x_test), output_dict=True)
-    print(pd.DataFrame(report),'\n')
+    report_df = pd.DataFrame(report)
+    report_df.to_csv("data/processed/classification_report.csv")
+    describe_classification_report(report_df,test_data)
+    print(report_df,'\n')
 
     # Taxa de conversão atual (sem modelo)
     baseline = c1[DECISION_TREE_TARGET_COL].mean()

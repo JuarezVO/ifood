@@ -9,6 +9,7 @@ from src.config import (
     PLOT_COLOR_FAIL,
     PLOT_COLOR_SUCCESS,
     PLOT_DPI,
+    IMAGE_DESCRIBE_CLASSIFICATION_REPORT_PATH,
 )
 
 def describe_offer(df: pd.DataFrame) -> None:
@@ -78,6 +79,56 @@ def describe_profile(df: pd.DataFrame) -> None:
     plt.savefig(IMAGE_DESCRIBE_PROFILE_PATH, dpi=PLOT_DPI, bbox_inches='tight')
 
 
+def describe_classification_report(cr: pd.DataFrame, df: pd.DataFrame) -> None:
+    """
+    Descreve o relatório de classificação
+    Args:
+        df: DataFrame com os dados
+    Returns:
+        None
+    """
+    print('Descrição do relatório de classificação\n')
+    df = df['offer_success'].value_counts()
+    test_tp = (df.loc[1] / df.sum()) * 100
+    test_total = int(df.sum())
+
+    model_tp = cr.loc['precision', '1'] * 100
+
+    real_pos = int(df.loc[1])
+    real_neg = int(df.loc[0])
+    tp = round(cr.loc['recall', '1'] * real_pos)
+    tn = round(cr.loc['recall', '0'] * real_neg)
+    fp = real_neg - tn
+    said_yes = int(tp + fp)
+
+    fig, axs = plt.subplots(1, 2, figsize=(10, 4))
+
+    axs[0].bar(['Without model', 'With model'], [test_total, said_yes],
+               color=[PLOT_COLOR_FAIL, PLOT_COLOR_SUCCESS], width=0.45, edgecolor='white')
+    axs[0].set_xlabel('Scenario')
+    axs[0].set_ylabel('Sent Offers')
+    axs[0].set_title('Sent Offers')
+    axs[0].spines[['top', 'right']].set_visible(False)
+
+    axs[1].bar(['Without model', 'With model'], [test_tp, model_tp],
+               color=[PLOT_COLOR_FAIL, PLOT_COLOR_SUCCESS], width=0.45, edgecolor='white')
+    axs[1].set_xlabel('Scenario')
+    axs[1].set_ylabel('Conversion Rate (%)')
+    axs[1].set_title('Conversion Rate')
+    axs[1].set_ylim(0, 110)
+    axs[1].spines[['top', 'right']].set_visible(False)
+
+    plt.tight_layout()
+    plt.savefig(IMAGE_DESCRIBE_CLASSIFICATION_REPORT_PATH, dpi=PLOT_DPI, bbox_inches='tight')
+    # plt.show()
+
+
 def describe_ds(df: pd.DataFrame) -> None:
     describe_offer(df)
     describe_profile(df)
+
+if __name__ == "__main__":
+    cr = pd.read_csv("data/processed/classification_report.csv", index_col=0)
+    df = pd.read_csv("data/processed/test_dataset.csv")
+
+    describe_classification_report(cr,df)

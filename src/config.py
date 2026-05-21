@@ -18,6 +18,7 @@ IMAGE_CLUSTERS_PATH = 'data/images/clusters.png'
 IMAGE_ELBOW_PATH = 'data/images/elbow.png'
 IMAGE_DESCRIBE_OFFER_PATH = 'data/images/describe_offer.png'
 IMAGE_DESCRIBE_PROFILE_PATH = 'data/images/describe_profile.png'
+IMAGE_DESCRIBE_CLASSIFICATION_REPORT_PATH = 'data/images/describe_classification_report.png'
 PLOT_DPI = 300
 
 # --- Caminhos: modelos ---
