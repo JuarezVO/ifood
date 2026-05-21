@@ -4,6 +4,7 @@ import datetime as dt
 TODAY = dt.datetime.now()
 TODAY_STR = TODAY.strftime('%Y-%m-%d')
 
+GENDER_LABELS = ['F', 'M', 'O']
 # --- Caminhos: dados brutos ---
 RAW_OFFERS_PATH = 'data/raw/offers.json'
 RAW_PROFILE_PATH = 'data/raw/profile.json'
@@ -45,7 +46,7 @@ KMEANS_ELBOW_K_MAX = 10
 OFFER_TYPE_EXCLUDE = 'informational'
 
 # --- Decision tree ---
-DECISION_TREE_TARGET_CLUSTER = 2
+DECISION_TREE_TARGET_CLUSTER = 1
 DECISION_TREE_FEATURES = [
     'channels', 'offer_type', 'min_value', 'discount_value',
     'discount_per_minvalue', 'duration', 'age', 'credit_card_limit',

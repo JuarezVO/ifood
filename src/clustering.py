@@ -3,28 +3,17 @@ import pandas as pd
 from pyspark.sql import DataFrame
 from pyspark.sql.functions import avg, col, first
 from sklearn.cluster import KMeans
-from sklearn.compose import ColumnTransformer
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OrdinalEncoder, StandardScaler
+from sklearn.preprocessing import LabelEncoder, StandardScaler
 
 from src.config import (
     CLUSTERING_COLS_PROFILE,
     CLUSTER_BY_ACCOUNT_PATH,
+    GENDER_LABELS,
     IMAGE_CLUSTERS_PATH,
     KMEANS_N_CLUSTERS,
     PLOT_DPI,
     RANDOM_STATE,
 )
-
-
-def _gender_categories_by_frequency(pdf: pd.DataFrame) -> list[list[str]]:
-    ordered = (
-        pdf["gender"]
-        .value_counts()
-        .sort_values(ascending=False)
-        .index.tolist()
-    )
-    return [ordered]
 
 
 def plot_clusters(data: pd.DataFrame, clusters: pd.Series, gender_labels: list[str]) -> None:
@@ -65,28 +54,16 @@ def plot_clusters(data: pd.DataFrame, clusters: pd.Series, gender_labels: list[s
     plt.close()
 
 
-def _build_kmeans_pipeline(gender_categories: list[list[str]]) -> Pipeline:
-    preprocessor = ColumnTransformer(
-        transformers=[
-            ("gender", OrdinalEncoder(categories=gender_categories), ["gender"]),
-            ("numeric", StandardScaler(), ["age", "credit_card_limit", "amount_medio"]),
-        ],
-    )
-    return Pipeline([
-        ("prep", preprocessor),
-        ("kmeans", KMeans(n_clusters=KMEANS_N_CLUSTERS, random_state=RANDOM_STATE, n_init="auto")),
-    ])
+def clustering(df: DataFrame) -> tuple[DataFrame, KMeans, StandardScaler, dict, pd.DataFrame]:
+    print("Clustering\n")
 
-
-def clustering(df: DataFrame) -> tuple[DataFrame, Pipeline, pd.DataFrame]:
-    print("Clustering (Ajuste de Variáveis)\n")
-
-    # PEGA DIRETO O VALOR RE REAL QUE O PREP CALCULOU
     profile_df = df.groupBy("account_id").agg(
         first("age").alias("age"),
         first("gender").alias("gender"),
         first("credit_card_limit").alias("credit_card_limit"),
-        first("mean_amount_per_account").alias("amount_medio"), # <--- CORREÇÃO AQUI
+        # CORREÇÃO 1: usar 'amount' diretamente com avg, igual ao sklearn (mean de 'amount' no groupby)
+        # O mean_amount_per_account do prep não deve ser usado aqui pois foi calculado antes dos filtros
+        avg("amount").alias("amount_medio"),
         avg("offer_success").alias("taxa_sucesso"),
     )
 
@@ -96,12 +73,25 @@ def clustering(df: DataFrame) -> tuple[DataFrame, Pipeline, pd.DataFrame]:
         .toPandas()
     )
 
-    gender_categories = _gender_categories_by_frequency(model_pdf)
-    gender_labels = gender_categories[0]
-    pipeline = _build_kmeans_pipeline(gender_categories)
-    pipeline.fit(model_pdf[CLUSTERING_COLS_PROFILE])
-    model_pdf["cluster"] = pipeline.predict(model_pdf[CLUSTERING_COLS_PROFILE])
+    # CORREÇÃO 2: usar LabelEncoder com ordem alfabética, igual ao sklearn
+    encoders = {}
+    df_model = model_pdf[CLUSTERING_COLS_PROFILE].copy()
+    df_plot = model_pdf[CLUSTERING_COLS_PROFILE + ["taxa_sucesso"]].copy()
 
+    for column in CLUSTERING_COLS_PROFILE:
+        if df_model[column].dtype == "object":
+            encoders[column] = LabelEncoder().fit(df_model[column])
+            df_model[column] = encoders[column].transform(df_model[column])
+            df_plot[column] = df_model[column]
+            gender_labels = list(encoders[column].classes_)
+
+    scaler = StandardScaler()
+    data_scaled = scaler.fit_transform(df_model[CLUSTERING_COLS_PROFILE])
+
+    kmeans = KMeans(n_clusters=KMEANS_N_CLUSTERS, random_state=RANDOM_STATE, n_init="auto")
+    clusters = kmeans.fit_predict(data_scaled)
+
+    model_pdf["cluster"] = clusters
     cluster_by_account = model_pdf[["account_id", "cluster"]].copy()
     cluster_by_account.to_csv(CLUSTER_BY_ACCOUNT_PATH, index=False)
 
@@ -110,24 +100,13 @@ def clustering(df: DataFrame) -> tuple[DataFrame, Pipeline, pd.DataFrame]:
         cluster_by_account.astype({"cluster": "int"}),
     )
 
-    profiles_with_cluster = profile_df.join(
-        clustered_profiles,
-        on="account_id",
-        how="left",
-    )
+    profile_df = profile_df.join(clustered_profiles, on="account_id", how="left")
     df = df.join(
-        profiles_with_cluster.select("account_id", "cluster", "taxa_sucesso"),
+        profile_df.select("account_id", "cluster", "taxa_sucesso"),
         on="account_id",
         how="left",
     )
 
-    plot_df = model_pdf.copy()
-    gender_encoder = pipeline.named_steps["prep"].named_transformers_["gender"]
-    plot_df["gender"] = gender_encoder.transform(plot_df[["gender"]]).ravel()
-    plot_clusters(
-        plot_df.drop(columns=["cluster", "account_id"]),
-        plot_df["cluster"],
-        gender_labels,
-    )
+    plot_clusters(df_plot, clusters, gender_labels)
 
-    return df, pipeline, cluster_by_account
+    return df, kmeans, scaler, encoders, cluster_by_account

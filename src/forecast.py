@@ -1,23 +1,37 @@
 import numpy as np
 import pandas as pd
-from sklearn.pipeline import Pipeline
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import LabelEncoder, StandardScaler
 
 from src.config import CLUSTERING_COLS_PROFILE, DECISION_TREE_FEATURES
 from src.schemas import UserOffer, UserProfile
 
 
-def inference_kmeans(kmeans_model: Pipeline, user_profile: UserProfile) -> int:
+def inference_kmeans(
+    kmeans_model: KMeans,
+    scaler: StandardScaler,
+    encoders: dict[str, LabelEncoder],
+    user_profile: UserProfile,
+) -> int:
     row = pd.DataFrame([{
         "age": user_profile.age,
         "gender": user_profile.gender,
         "credit_card_limit": user_profile.credit_card_limit,
         "amount_medio": user_profile.amount_medio,
     }])
-    return int(kmeans_model.predict(row[CLUSTERING_COLS_PROFILE])[0])
+
+    # Aplica os encoders nas colunas categóricas (mesmo processo do treino)
+    for column, encoder in encoders.items():
+        row[column] = encoder.transform(row[column])
+
+    # Aplica o scaler (mesmo processo do treino)
+    row_scaled = scaler.transform(row[CLUSTERING_COLS_PROFILE])
+
+    return int(kmeans_model.predict(row_scaled)[0])
 
 
 def inference_dt(
-    dt_model: Pipeline,
+    dt_model,
     user_profile: UserProfile,
     user_offer: UserOffer,
 ) -> np.ndarray:

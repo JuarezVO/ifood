@@ -41,7 +41,7 @@ try:
     dataset = df.toPandas()
     dataset.to_csv(PROCESSED_FULL_DATASET_PATH, index=False)
 
-    df, kmeans_model, cluster_by_account = clustering(df)
+    df, kmeans_model, scaler, encoders, cluster_by_account = clustering(df)
     dt_model = train_decision_tree(dataset, cluster_by_account)
     save_clustered_dataset(dataset, cluster_by_account)
 
@@ -60,7 +60,7 @@ try:
         success_rate=float(sample_rows["offer_success"].mean()),
     )
 
-    user_group = inference_kmeans(kmeans_model, user_profile)
+    user_group = inference_kmeans(kmeans_model, scaler, encoders, user_profile)
     print(f"cluster: {user_group} (conta exemplo: {sample_id})")
 
     if user_group == DECISION_TREE_TARGET_CLUSTER:
