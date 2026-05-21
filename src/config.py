@@ -4,7 +4,6 @@ import datetime as dt
 TODAY = dt.datetime.now()
 TODAY_STR = TODAY.strftime('%Y-%m-%d')
 
-GENDER_LABELS = ['F', 'M', 'O']
 # --- Caminhos: dados brutos ---
 RAW_OFFERS_PATH = 'data/raw/offers.json'
 RAW_PROFILE_PATH = 'data/raw/profile.json'
@@ -30,6 +29,8 @@ PREP_COLS_TO_DROP = ['event_recv', 'event_view', 'event_jornada','amount_jornada
 PREP_COLS_TO_RENAME = {'reward_comp_jornada': 'reward', 'time_since_test_start': 'time_since_test_start_transaction'}
 PREP_DROP_NA_SUBSETS = ['offer_code', 'account_id']
 PREP_AGE_MAX = 80
+GENDER_LABELS = ['F', 'M', 'O']
+
 
 PREP_OFFER_CODE = {'ae264e3637204a6fb9bb56bc8210ddfd': 'Offer 1', '0b1e1539f2cc45b7b9fa7c272da2e1d7': 'Offer 2',
  '2906b810c7d4411798c6938adc9daaa5': 'Offer 3', '2298d6c36e964ae4a3e7e9706d1fb8c2': 'Offer 4',
